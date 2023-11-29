@@ -1,0 +1,49 @@
+name: Test on Staging
+on:
+  workflow_run:
+    workflows: ["Deploy to Staging"]
+    types:
+      - completed
+
+jobs:
+  test_on_staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Deploy Staging Workflow succeeded
+        id: check-status
+        run: echo "deploy_status=${{ github.event.workflow_run.conclusion == 'success' }}" >> $GITHUB_OUTPUT
+     
+      - name: Conditionally run if Testing and Analyzing fail
+        id: set-exit-code
+        run: |
+          if [ "${{ steps.check-status.outputs.deploy_status }}" == "false" ]; then
+            echo "Job failed, setting exit code to 1"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to docker container and run test
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            docker exec oop_search_staging npm run test:staging
+
+      - name: Merge develop into master if test successful
+        run: |
+          git config user.name "${{ secrets.GITHUB_ACTOR }}"
+          git config user.email "${{ secrets.GITHUB_ACTOR }}@users.noreply.github.com"
+          git fetch --all
+          git checkout master
+          git merge origin/develop
+          git push origin master
+
+      - name: Set test result status
+        id: set-status
+        run: echo "status=success" >> $GITHUB_OUTPUT

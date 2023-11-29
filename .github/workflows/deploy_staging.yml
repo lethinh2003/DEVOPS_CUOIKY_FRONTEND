@@ -1,0 +1,61 @@
+name: Deploy to Staging
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy_to_staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Create env file
+        run: echo "${{ secrets.CONFIG_ENV }}" > .env
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16.20.0"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Remove old workplace SSH server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            rm -rf /home/ubuntu/devops/frontend_staging
+            mkdir /home/ubuntu/devops/frontend_staging
+
+      - name: Copy source from github to SSH server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "./*"
+          target: "/home/ubuntu/devops/frontend_staging"
+
+      - name: Execute Docker Compose on SSH Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/ubuntu/devops
+            docker compose up -d --build frontend_staging
+      - name: Set deploy result status
+        id: set-status
+        run: echo "deploy_status=success" >> $GITHUB_OUTPUT

@@ -1,0 +1,29 @@
+name: Testing and Analyzing
+
+on: [push, pull_request]
+
+jobs:
+  testing_and_analyzing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Create env file
+        run: echo "${{ secrets.CONFIG_ENV }}" > .env
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16.20.0"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Set test result status
+        id: set-status
+        run: echo "status=success" >> $GITHUB_OUTPUT
